@@ -1,0 +1,4 @@
+{
+  "folders": [{ "name": "快听 · Mac 应用", "path": "." }],
+  "settings": { "files.exclude": { "node_modules": true }, "search.exclude": { "release/**": true, "node_modules/**": true } }
+}

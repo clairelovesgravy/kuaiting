@@ -1,0 +1,8 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    { "label": "快听：检查代码", "type": "npm", "script": "check", "problemMatcher": [] },
+    { "label": "快听：启动应用", "type": "npm", "script": "dev", "problemMatcher": [] },
+    { "label": "快听：打包 Mac 应用", "type": "npm", "script": "package:mac", "problemMatcher": [], "group": "build" }
+  ]
+}

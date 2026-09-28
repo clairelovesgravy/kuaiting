@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "快听：启动 Mac 应用",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+      "runtimeArgs": [".", "--dev"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "outputCapture": "std",
+      "skipFiles": ["<node_internals>/**"],
+      "preLaunchTask": "快听：检查代码",
+      "env": { "ELECTRON_RUN_AS_NODE": null }
+    }
+  ]
+}
