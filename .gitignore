@@ -2,3 +2,5 @@ node_modules/
 release/
 .DS_Store
 *.log
+.openai/
+.claude/
