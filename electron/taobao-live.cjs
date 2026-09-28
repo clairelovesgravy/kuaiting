@@ -17,6 +17,16 @@ function streamURL(value) {
   } catch { return null; }
 }
 
+function rtcURL(value) {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'artc:' || url.username || url.password || url.port ||
+      !(url.hostname === 'taobao.com' || url.hostname.endsWith('.taobao.com'))) return null;
+    return url.href;
+  } catch { return null; }
+}
+
 function extractLive(data, expectedId) {
   if (!data || typeof data !== 'object') throw new Error('淘宝返回的直播间信息不完整，请重试。');
   const returnedId = String(data.liveId || data.id || '');
@@ -27,7 +37,10 @@ function extractLive(data, expectedId) {
   const urls = [...variants.filter(item => item?.definition === 'ld').map(item => item.flvUrl),
     data.liveUrl, ...variants.map(item => item?.flvUrl)].map(streamURL).filter(Boolean);
   if (!urls.length) throw new Error('这个直播间没有可用的 FLV 音频来源，暂时无法收听。');
-  return { liveId: expectedId, title: String(data.title || '淘宝直播间').slice(0, 120), sourceURL: urls[0] };
+  // ARTC 超低延时流优先选 md（720p）档；只在需要兜底时用 FLV。
+  const rtc = [variants.find(item => item?.definition === 'md')?.rtcLiveUrl,
+    ...variants.map(item => item?.rtcLiveUrl), data.rtcLiveUrl].map(rtcURL).find(Boolean) || null;
+  return { liveId: expectedId, title: String(data.title || '淘宝直播间').slice(0, 120), sourceURL: urls[0], rtcURL: rtc };
 }
 
 async function resolveRoom(value, { signal, fetchImpl = fetch } = {}) {
@@ -82,4 +95,4 @@ async function openStream(sourceURL, { signal, fetchImpl = fetch } = {}) {
   throw new Error('直播流跳转次数过多，请重试。');
 }
 
-module.exports = { resolveRoom, extractLive, streamURL, openStream, REQUEST_HEADERS };
+module.exports = { resolveRoom, extractLive, streamURL, rtcURL, openStream, REQUEST_HEADERS };

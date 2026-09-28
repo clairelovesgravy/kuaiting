@@ -23,6 +23,7 @@
     "node": ">=22.12.0"
   },
   "dependencies": {
+    "aliyun-rts-sdk": "^2.15.0",
     "mpegts.js": "1.8.2"
   }
 }

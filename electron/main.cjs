@@ -60,7 +60,10 @@ ipcMain.handle('kuaiting:resolve-live', async (event, value) => {
     if (generation !== resolveGeneration) return { ok: false, error: '连接已取消。' };
     const id = randomUUID();
     activeLive = { ...live, id, controllers: new Set() };
-    return { ok: true, liveId: live.liveId, title: live.title, streamURL: `kuaiting-stream://live/${id}` };
+    // 淘宝内部 ARTC 信令与公开 SDK 不兼容（实测 404，2026-09-28），默认关闭以免拖慢起播；
+    // 渲染端保留完整退回逻辑，未来可用 KUAITING_ARTC=1 启用验证。
+    const rtcURL = process.env.KUAITING_ARTC === '1' ? (live.rtcURL || null) : null;
+    return { ok: true, liveId: live.liveId, title: live.title, rtcURL, streamURL: `kuaiting-stream://live/${id}` };
   } catch (error) {
     const message = error.name === 'TimeoutError' ? '连接淘宝超时，请检查网络后重试。' :
       error.name === 'AbortError' ? '连接已取消。' : error.message === 'fetch failed' ? '暂时无法连接淘宝，请检查网络后重试。' : error.message;

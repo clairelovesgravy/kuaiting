@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { parse } = require('../dist/room-link.js');
-const { resolveRoom, extractLive, streamURL, openStream } = require('../electron/taobao-live.cjs');
+const { resolveRoom, extractLive, streamURL, rtcURL, openStream } = require('../electron/taobao-live.cjs');
 
 test('accepts the reported follow link and preserves liveId as a string', () => {
   const url = 'https://tbzb.taobao.com/follow?spm=a21bo.29164009.discovery.1.15425f7eTovUbB&liveSource=pc_live.follow&liveId=653358385807746';
@@ -26,7 +26,11 @@ test('rejects spoofed hosts, credentials, missing and ambiguous room IDs', () =>
 
 const liveData = { id: '123', title: '直播间', roomStatus: 1, streamStatus: 1,
   liveUrl: 'http://liveng.alicdn.com/high.flv',
-  liveUrlList: [{ definition: 'ld', flvUrl: 'http://liveng.alicdn.com/low.flv' }] };
+  liveUrlList: [
+    { definition: 'ld', flvUrl: 'http://liveng.alicdn.com/low.flv' },
+    { definition: 'md', flvUrl: 'http://liveng.alicdn.com/low.flv',
+      rtcLiveUrl: 'artc://liveng-rtclive.taobao.com/liveplatform/stream?auth_key=1-0-0-abc' }
+  ] };
 
 test('selects a valid live FLV stream and refuses replay/offline data', () => {
   assert.equal(extractLive(liveData, '123').sourceURL, 'https://liveng.alicdn.com/low.flv');
@@ -36,6 +40,14 @@ test('selects a valid live FLV stream and refuses replay/offline data', () => {
   assert.equal(streamURL('https://127.0.0.1/secret.flv'), null);
   assert.equal(streamURL('https://alicdn.com.evil.test/live.flv'), null);
   assert.equal(streamURL('https://liveng.alicdn.com/live.m3u8'), null);
+});
+
+test('prefers the md ARTC URL and rejects non-taobao RTC hosts', () => {
+  assert.equal(extractLive(liveData, '123').rtcURL, 'artc://liveng-rtclive.taobao.com/liveplatform/stream?auth_key=1-0-0-abc');
+  assert.equal(extractLive({ ...liveData, liveUrlList: [{ definition: 'ld', flvUrl: 'http://liveng.alicdn.com/low.flv' }] }, '123').rtcURL, null);
+  assert.equal(rtcURL('artc://evil.test/live'), null);
+  assert.equal(rtcURL('artc://taobao.com.evil.test/live'), null);
+  assert.equal(rtcURL('https://liveng-rtclive.taobao.com/live'), null);
 });
 
 test('anonymous token handshake retries once then parses the current room', async () => {

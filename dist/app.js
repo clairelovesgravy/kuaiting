@@ -45,12 +45,12 @@ function updatePlayer() {
     $('status').innerHTML = '<i></i><span></span>';
     $('status').lastElementChild.textContent = label;
     $('room-title').textContent = liveRoom?.title || '淘宝直播间';
-    $('room-subtitle').textContent = liveRoom ? `直播间 ${liveRoom.liveId} · FLV 纯音频` : '正在获取直播音频来源';
+    $('room-subtitle').textContent = liveRoom ? `直播间 ${liveRoom.liveId} · ${livePlayer.isRTC ? 'RTC 超低延时' : 'FLV 纯音频'}` : '正在获取直播音频来源';
     $('stage-title').textContent = { connecting: '正在连接你的直播间', buffering: '声音马上就来', playing: '只听声音，专注这一刻', paused: '收听已暂停', error: '这次没能连上直播' }[liveStatus];
     $('stage-description').textContent = liveError || (liveStatus === 'paused' ? '继续收听将重新连接到当前直播进度' : '本地音频播放 · 不解码画面 · 提前量需与手机实测');
     $('transport-label').textContent = label;
-    $('footer-status').textContent = liveStatus === 'playing' ? 'FLV 音频已连接' : label;
-    $('buffer-status').textContent = liveStatus === 'playing' ? `本地缓冲 ${livePlayer.bufferSeconds.toFixed(1)} 秒 · 非直播总延迟` : '等待音频播放';
+    $('footer-status').textContent = liveStatus === 'playing' ? (livePlayer.isRTC ? 'RTC 低延时音频已连接' : 'FLV 音频已连接') : label;
+    $('buffer-status').textContent = liveStatus === 'playing' ? (livePlayer.isRTC ? 'RTC 实时收听 · 无缓冲积压' : `本地缓冲 ${livePlayer.bufferSeconds.toFixed(1)} 秒 · 非直播总延迟`) : '等待音频播放';
     $('demo-button').innerHTML = icon(playing ? 'pause' : 'play') + (playing ? '暂停收听' : liveStatus === 'paused' ? '继续收听' : liveStatus === 'error' ? '重新连接' : '正在连接…');
     $('demo-button').disabled = busy;
     $('toggle-play').setAttribute('aria-label', playing ? '暂停直播' : '继续收听直播');
@@ -105,7 +105,7 @@ async function toggleDemo() {
 }
 function stopPlayback() { livePlayer.stop(); liveMode=false; liveStatus='idle'; liveRoom=null; liveError=''; if(source){source.stop();source=null;}playing=false;started=false;elapsed=0;updateTime();updatePlayer(); }
 function startLive(url) { stopPlayback(); setError(''); setTab('player'); liveInputURL=url; livePlayer.connect(url); }
-setInterval(()=>{const now=performance.now();if(playing){elapsed+=(now-lastTick)/1000;updateTime();if(liveMode)$('buffer-status').textContent=`本地缓冲 ${livePlayer.bufferSeconds.toFixed(1)} 秒 · 非直播总延迟`;}lastTick=now;},250);
+setInterval(()=>{const now=performance.now();if(playing){elapsed+=(now-lastTick)/1000;updateTime();if(liveMode&&!livePlayer.isRTC)$('buffer-status').textContent=`本地缓冲 ${livePlayer.bufferSeconds.toFixed(1)} 秒 · 非直播总延迟`;}lastTick=now;},250);
 function loadRoom(url) { $('room-url').value=url;$('clear-url').hidden=false;setError('');setTab('player');$('room-url').focus();toast('链接已填入，可点击快速播放。'); }
 function setTab(tab) { const selected = tab === 'favorites' ? 'favorites' : 'player'; $('player-view').hidden=selected!=='player';$('favorites-view').hidden=selected!=='favorites';document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===selected);b.setAttribute('aria-current',b.dataset.tab===selected?'page':'false');}); }
 function makeFavorite(item,compact=false) { const row=document.createElement('div');row.className='favorite-item';const badge=document.createElement('span');badge.className='mini-mark';badge.innerHTML=icon('headphones');const info=document.createElement('div');info.className='favorite-info';const name=document.createElement('strong');name.textContent=item.name;const url=document.createElement('p');url.textContent=compact?'淘宝直播间':item.url;info.append(name,url);const play=document.createElement('button');play.className='load-favorite';play.innerHTML=compact?icon('arrow'):'打开';play.setAttribute('aria-label',`打开 ${item.name}`);play.onclick=()=>loadRoom(item.url);row.append(badge,info,play);if(!compact){const remove=document.createElement('button');remove.className='icon-button';remove.innerHTML=icon('close');remove.setAttribute('aria-label',`删除收藏 ${item.name}`);remove.onclick=()=>{favorites=favorites.filter(f=>f.url!==item.url);if(!memory.set('kuaiting.favorites',favorites))toast('浏览器无法保存更改，刷新后可能恢复。');renderFavorites();};row.append(remove);}return row; }
