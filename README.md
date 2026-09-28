@@ -27,6 +27,8 @@ npm run package:mac
 
 命令会为当前 Mac 架构生成 `.app`；在 Intel Mac 上运行时输出目录为 `release/快听-darwin-x64/`。无需安装到「应用程序」目录即可运行。
 
+如果下载 Electron 运行时失败（无法访问 GitHub），可改用镜像：`ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" npm run package:mac`。
+
 ## 可体验的功能
 
 - 粘贴及校验淘宝网页版直播间地址。
