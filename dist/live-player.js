@@ -79,7 +79,7 @@ class KuaitingLivePlayer {
       const player = this.player = mpegts.createPlayer({ type: 'flv', isLive: true,
         url: result.streamURL, hasAudio: true, hasVideo: false }, {
         enableWorker: false, enableStashBuffer: false, lazyLoad: false,
-        liveBufferLatencyChasing: false, liveSync: false,
+        liveBufferLatencyChasing: true, liveBufferLatencyMaxLatency: 2, liveBufferLatencyMinRemain: .3,
         autoCleanupSourceBuffer: true, autoCleanupMaxBackwardDuration: 10,
         autoCleanupMinBackwardDuration: 3, statisticsInfoReportInterval: 1000
       });
