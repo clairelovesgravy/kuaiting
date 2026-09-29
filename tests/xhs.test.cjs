@@ -19,6 +19,15 @@ test('accepts xhs share short links and live room urls, keeps taobao behavior', 
   ]) assert.throws(() => parse(url));
 });
 
+test('extracts the link when a whole share message is pasted', () => {
+  const share = '小红书，你的生活指南#六舒翡翠闲置正在直播，来和我一起支持ta吧。 https://xhslink.com/o/1eY27L9oxRM 复制本条信息，打开【小红书】，直接观看直播！';
+  const parsed = parse(share);
+  assert.equal(parsed.platform, 'xhs');
+  assert.equal(parsed.url, 'https://xhslink.com/o/1eY27L9oxRM');
+  assert.equal(parse('看看这个 https://tbzb.taobao.com/live?liveId=123 蛮好的').liveId, '123');
+  assert.throws(() => parse('这段话里根本没有链接，来和我一起支持ta吧。'), /请粘贴完整的直播间链接/);
+});
+
 test('streamURL only accepts flv on xhscdn.com and upgrades to https', () => {
   assert.equal(streamURL('http://live-source-play.xhscdn.com/live/1.flv'), 'https://live-source-play.xhscdn.com/live/1.flv');
   assert.equal(streamURL('http://live.xhscdn.com/live/1.flv'), 'https://live.xhscdn.com/live/1.flv');

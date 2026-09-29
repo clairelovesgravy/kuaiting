@@ -6,7 +6,14 @@
   const ROOM_PATH = /^\/livestream\/[^/]+\/(\d{1,30})\/?$/;
   function parse(value) {
     if (typeof value !== 'string' || value.length > 8192) throw new Error('请粘贴完整的直播间链接。');
-    const text = value.trim().replace(/\\([&_])/g, '$1').replace(/&amp;/g, '&');
+    let text = value.trim();
+    // 分享文案直接整段粘贴时（如小红书/淘宝 App 分享语），从中提取第一个 https 链接；
+    // 链接本身只含 ASCII 可见字符，遇到空格、引号、中文及标点即结束。
+    if (!/^https:\/\//i.test(text)) {
+      const found = text.match(/https:\/\/[\x21-\x7e]+/i);
+      if (found) text = found[0];
+    }
+    text = text.replace(/\\([&_])/g, '$1').replace(/&amp;/g, '&');
     let url;
     try { url = new URL(text); } catch { throw new Error('请粘贴完整的直播间链接。'); }
     if (url.protocol !== 'https:' || url.port || url.username || url.password) throw new Error('请粘贴淘宝或小红书直播间链接。');
