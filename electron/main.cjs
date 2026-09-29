@@ -6,7 +6,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
-const { resolveRoom, openStream } = require('./taobao-live.cjs');
+const { resolveRoom: resolveTaobao, openStream } = require('./taobao-live.cjs');
+const { resolveRoom: resolveXHS } = require('./xhs-live.cjs');
+const { parse: parseRoomLink } = require('../dist/room-link.js');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'kuaiting-stream', privileges: {
   standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true
@@ -56,17 +58,22 @@ ipcMain.handle('kuaiting:resolve-live', async (event, value) => {
   const generation = resolveGeneration;
   resolveController = new AbortController();
   try {
-    const live = await resolveRoom(value, { signal: resolveController.signal });
+    const link = parseRoomLink(value);
+    const live = link.platform === 'xhs'
+      ? await resolveXHS(value, { signal: resolveController.signal })
+      : await resolveTaobao(value, { signal: resolveController.signal });
     if (generation !== resolveGeneration) return { ok: false, error: '连接已取消。' };
     const id = randomUUID();
     activeLive = { ...live, id, controllers: new Set() };
     // 淘宝内部 ARTC 信令与公开 SDK 不兼容（实测 404，2026-09-28），默认关闭以免拖慢起播；
     // 渲染端保留完整退回逻辑，未来可用 KUAITING_ARTC=1 启用验证。
     const rtcURL = process.env.KUAITING_ARTC === '1' ? (live.rtcURL || null) : null;
-    return { ok: true, liveId: live.liveId, title: live.title, rtcURL, streamURL: `kuaiting-stream://live/${id}` };
+    return { ok: true, liveId: live.liveId, title: live.title, platform: link.platform, rtcURL, streamURL: `kuaiting-stream://live/${id}` };
   } catch (error) {
-    const message = error.name === 'TimeoutError' ? '连接淘宝超时，请检查网络后重试。' :
-      error.name === 'AbortError' ? '连接已取消。' : error.message === 'fetch failed' ? '暂时无法连接淘宝，请检查网络后重试。' : error.message;
+    const platform = (() => { try { return parseRoomLink(value).platform; } catch { return 'taobao'; } })();
+    const target = platform === 'xhs' ? '小红书' : '淘宝';
+    const message = error.name === 'TimeoutError' ? `连接${target}超时，请检查网络后重试。` :
+      error.name === 'AbortError' ? '连接已取消。' : error.message === 'fetch failed' ? `暂时无法连接${target}，请检查网络后重试。` : error.message;
     const retryable = error.retryable ?? ['TimeoutError', 'TypeError'].includes(error.name);
     return { ok: false, error: message || '直播连接失败，请重试。', retryable };
   }

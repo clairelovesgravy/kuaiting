@@ -89,7 +89,7 @@ class KuaitingLivePlayer {
       const result = await this.bridge.resolveLive(this.inputURL);
       if (!current()) return;
       if (!result.ok) throw this.error(result.error, result.retryable === true);
-      this.room = { title: result.title, liveId: result.liveId };
+      this.room = { title: result.title, liveId: result.liveId, platform: result.platform || 'taobao' };
       // 优先 ARTC 超低延时通道（WebRTC 直连，只收音轨）；本会话内失败过就不再尝试。
       if (result.rtcURL && window.AliRTS && !this.rtcUnavailable) {
         const started = await this.connectRTC(result, current, fail);
