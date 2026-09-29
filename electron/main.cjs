@@ -67,7 +67,8 @@ ipcMain.handle('kuaiting:resolve-live', async (event, value) => {
   } catch (error) {
     const message = error.name === 'TimeoutError' ? '连接淘宝超时，请检查网络后重试。' :
       error.name === 'AbortError' ? '连接已取消。' : error.message === 'fetch failed' ? '暂时无法连接淘宝，请检查网络后重试。' : error.message;
-    return { ok: false, error: message || '直播连接失败，请重试。' };
+    const retryable = error.retryable ?? ['TimeoutError', 'TypeError'].includes(error.name);
+    return { ok: false, error: message || '直播连接失败，请重试。', code: error.code || error.name, retryable };
   }
 });
 ipcMain.handle('kuaiting:stop-live', (event) => {
@@ -83,18 +84,30 @@ function installLiveProtocol() {
     }
     const controller = new AbortController();
     live.controllers.add(controller);
-    request.signal.addEventListener('abort', () => controller.abort(), { once: true });
+    const cleanup = () => { controller.abort(); live.controllers.delete(controller); request.signal.removeEventListener('abort', cleanup); };
+    request.signal.addEventListener('abort', cleanup, { once: true });
+    if (request.signal.aborted) cleanup();
     const timer = setTimeout(() => controller.abort(), 12000);
     try {
       const upstream = await openStream(live.sourceURL, { signal: controller.signal });
       clearTimeout(timer);
-      if (!upstream.ok || !upstream.body) { controller.abort(); return new Response('Upstream unavailable', { status: 502 }); }
-      return new Response(upstream.body, { headers: {
+      if (!upstream.ok || !upstream.body) { cleanup(); return new Response('Upstream unavailable', { status: 502 }); }
+      const reader = upstream.body.getReader();
+      const body = new ReadableStream({
+        async pull(target) {
+          try {
+            const part = await reader.read();
+            if (part.done) { cleanup(); target.close(); } else target.enqueue(part.value);
+          } catch (error) { cleanup(); target.error(error); }
+        },
+        async cancel() { cleanup(); try { await reader.cancel(); } catch {} }
+      });
+      return new Response(body, { headers: {
         'Content-Type': 'video/x-flv', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store'
       } });
     } catch {
       clearTimeout(timer);
-      live.controllers.delete(controller);
+      cleanup();
       return new Response('Stream connection failed', { status: 502 });
     }
   });

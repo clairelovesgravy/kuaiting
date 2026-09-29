@@ -76,6 +76,33 @@ test('login or verification is reported without repeatedly retrying', async () =
   assert.equal(calls, 1);
 });
 
+test('reuses anonymous session until expiration, refreshing a rejected token once', async () => {
+  let calls = 0;
+  const expiry = Date.now() + 120000;
+  const fetchImpl = async (_url, options) => {
+    calls++;
+    if (calls === 1 || calls === 4) return new Response(JSON.stringify({ ret: ['FAIL_SYS_TOKEN_EXOIRED::expired'], data: {} }), {
+      headers: { 'Set-Cookie': `_m_h5_tk=${calls === 1 ? 'first' : 'renewed'}_${expiry}; Path=/; Secure` }
+    });
+    assert.match(options.headers.Cookie, calls === 5 ? /renewed_/ : /first_/);
+    return new Response(JSON.stringify({ ret: ['SUCCESS::调用成功'], data: liveData }));
+  };
+  const url = 'https://tbzb.taobao.com/live?liveId=123';
+  await resolveRoom(url, { fetchImpl }); assert.equal(calls, 2);
+  await resolveRoom(url, { fetchImpl }); assert.equal(calls, 3);
+  await resolveRoom(url, { fetchImpl }); assert.equal(calls, 5);
+});
+
+test('offline room and verification are terminal; server errors permit retry', async () => {
+  assert.throws(() => extractLive({ ...liveData, roomStatus: 2 }, '123'), error => error.code === 'OFFLINE' && error.retryable === false);
+  await assert.rejects(resolveRoom('https://tbzb.taobao.com/live?liveId=123', {
+    fetchImpl: async () => new Response('', { status: 503 })
+  }), error => error.retryable === true);
+  await assert.rejects(resolveRoom('https://tbzb.taobao.com/live?liveId=123', {
+    fetchImpl: async () => new Response(JSON.stringify({ ret: ['FAIL_SYS_USER_VALIDATE::verify'], data: {} }))
+  }), error => error.code === 'VERIFY' && error.retryable === false);
+});
+
 test('follows Taobao CDN redirects and rejects redirects to private hosts', async () => {
   let calls = 0;
   const response = await openStream('https://liveng.alicdn.com/live.flv', { fetchImpl: async () => {
