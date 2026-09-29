@@ -1,7 +1,7 @@
 {
   "name": "kuaiting",
   "productName": "快听",
-  "version": "0.3.0",
+  "version": "0.2.0",
   "description": "快听 · 薄荷风桌面直播音频工作台",
   "private": true,
   "main": "electron/main.cjs",
@@ -9,10 +9,9 @@
   "scripts": {
     "start": "env -u ELECTRON_RUN_AS_NODE electron .",
     "dev": "env -u ELECTRON_RUN_AS_NODE electron . --dev",
-    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check dist/app.js && node --check scripts/package-mac.cjs && node --check electron/taobao-live.cjs && node --check dist/room-link.js && node --check dist/live-player.js && node --check dist/latency-controller.js",
+    "check": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check dist/app.js && node --check scripts/package-mac.cjs && node --check electron/taobao-live.cjs && node --check dist/room-link.js && node --check dist/live-player.js",
     "test:smoke": "node scripts/smoke-test.cjs",
     "package:mac": "node scripts/package-mac.cjs",
-    "release:mac": "node scripts/package-mac.cjs --distribute",
     "postinstall": "node scripts/copy-vendor.cjs",
     "test": "node --test tests/*.test.cjs"
   },

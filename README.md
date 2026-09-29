@@ -2,21 +2,9 @@
 
 薄荷风的桌面音频工作台，使用 Electron 加载项目内的 HTML、CSS 和 JavaScript。无需启动网页服务，页面、字体和提示音均可离线使用。
 
-**已接入淘宝直播解析，可收听真实直播的纯音频（FLV 只解码音轨）。当前版本为 0.3.0。**
+**已接入淘宝直播解析，可收听真实直播的纯音频（FLV 只解码音轨）。** 2026-09-28 用进行中的直播间实测：约 1 秒起播、稳定播放、追帧后本地缓冲约 1.6~1.8 秒。
 
-## 0.3 自动小步追赶
-
-- 每 250 ms 检查一次连续可播放缓冲，目标为 0.5 秒；超过约 0.58 秒即开始追赶，不等待严重积压、不弹确认。起播 CDN 追溯片段或长时间断流造成 3 秒以上积压时，一次跳到直播边缘，再交由小步模式维持。
-- 单次前移 20–60 ms，配合 1.02–1.08× 轻微加速；用户选择更高倍速时，仅在积压期间用作追赶加速。接近目标后自动回到 1.0×，避免持续倍速耗空缓冲。
-- 缓冲不足、暂停、正在定位或缓冲有断层时不前移。目标值是调度参数，不保证实际缓冲始终达标。
-- **小步前移仍会跳过短片段，不能保证不漏短音节。** 可以在「使用帮助 → 本次播放诊断」查看前移次数及累计时长。
-- 临时断网自动等待联网；网络或推流故障最多重试 3 次（间隔 0.5、1.5、3 秒），每次重新获取播放地址。连续稳定播放 30 秒后恢复重试额度。下播、无音轨、格式不支持、登录/验证要求不会反复请求。
-- 停止、暂停、切换直播间会取消旧请求和重试。匿名令牌仅在内存复用，最久 5 分钟，并提前于令牌到期失效。
-- 诊断记录解析耗时、首次播放事件耗时、本地缓冲、追赶、卡顿及重连；起播时间不包括对物理扬声器出声的测量。没有录制或上传直播音频。
-
-相对手机观看的提前量仍需用同一句主播声音对齐录音测量；本地缓冲不等于直播总延迟。之前的起播和缓冲测量属于旧版本，不能作为本版性能承诺。
-
-ARTC 默认关闭。之前对部分淘宝 ARTC 地址使用公开 SDK 返回 404，尚未验证兼容性，不代表所有直播间均不可用。保留 `KUAITING_ARTC=1` 实验入口；现在回退计时等待真正起播，9 秒未出播放事件则回退 FLV。
+关于延迟：已实测淘宝接口没有纯音频流地址，也没有可用的公开低延时通道——接口返回的 `artc://` RTC 地址走的是淘宝私有信令协议，公开 `aliyun-rts-sdk` 无法对接（信令 404，2026-09-28 实测）。应用内保留了完整的 ARTC 播放与自动退回逻辑（`KUAITING_ARTC=1` 启用），未来协议可对接时无需改动渲染层。相对手机观看的提前量需要实测。
 
 ## 在 VS Code 中试用
 
@@ -43,26 +31,6 @@ npm run package:mac
 
 如果下载 Electron 运行时失败（无法访问 GitHub），可改用镜像：`ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" npm run package:mac`。
 
-## Developer ID 签名与 Apple 公证
-
-正式发布命令已配置，但当前尚未完成正式签名和公证。需要先加入 [Apple Developer Program](https://developer.apple.com/programs/)，并在这台 Mac 的钥匙串中安装有效的 **Developer ID Application** 证书及对应私钥。Apple Development 证书不能替代它。
-
-1. 会员生效后，在 Xcode → Settings → Accounts 添加开发者账号，通过 Manage Certificates 创建 Developer ID Application 证书（团队可能需要 Account Holder 操作）。已有证书在另一台 Mac 时，应安全导出并导入含私钥的 `.p12`，不要放进项目。
-2. 执行 `security find-identity -v -p codesigning`，确认能找到有效的 Developer ID Application。
-3. 在自己的终端交互配置公证凭据，按提示填写 Apple 账号、Team ID 和 App 专用密码；不要把密码发到聊天或写入代码：
-
-   ```sh
-   xcrun notarytool store-credentials "kuaiting-notary"
-   ```
-
-4. 执行 `npm run release:mac`。脚本先检查证书和钥匙串凭据，再使用 Electron Packager 的签名、公证工具，启用 hardened runtime、Apple 时间戳和 JIT entitlement。公证成功后自动附加票据，验证签名、票据及 Gatekeeper，最后生成可分发 ZIP。
-
-正式输出位于 `release/notarized/快听-darwin-arm64/`（Intel 为 x64），不覆盖本机试用包。多张证书时使用 `KUAITING_SIGN_IDENTITY` 指定完整名称或 SHA-1；其他钥匙串档案可用 `KUAITING_NOTARY_PROFILE` 指定。所有凭据预检通过后才会开始打包和提交 Apple。
-
-公证涉及网络上传和 Apple 审核，可能需要等待。命令报错即不视为发布成功；若已提交但等待中断，可使用 `xcrun notarytool history --keychain-profile kuaiting-notary` 查询提交记录。当前机器缺少证书，因此仅验证了脚本语法及缺失证书时的拦截，尚未验证真实签名、公证与正式包启动。
-
-参考：[Apple Developer ID](https://developer.apple.com/developer-id/)、[Electron 公证工具](https://github.com/electron/notarize)。
-
 ## 可体验的功能
 
 - 粘贴及校验淘宝网页版直播间地址。
@@ -78,8 +46,7 @@ npm run package:mac
 
 ```text
 dist/                     页面源码（直接编辑，无需编译）
-dist/live-player.js       播放状态、自动重连及 RTC 回退
-dist/latency-controller.js 自动小步追赶控制器
+dist/live-player.js       渲染进程 FLV 直播播放器（mpegts.js 纯音频）
 dist/vendor/              mpegts.js 及其许可证
 electron/main.cjs         Mac 窗口、菜单、生命周期、直播流代理协议
 electron/taobao-live.cjs  淘宝直播详情解析（匿名 H5 会话）与 CDN 流校验
@@ -97,13 +64,12 @@ release/                  生成的 Mac 应用（不提交 Git）
 
 ```sh
 npm run check
-npm test
 npm run test:smoke
 ```
 
 启动检查使用临时应用数据目录，检查本地页面加载、隔离预加载脚本与页面初始化，并捕获加载失败、渲染进程退出及控制台错误。它不会读取或覆盖你的收藏。
 
-渲染进程启用 `contextIsolation` 和沙箱，禁用 Node 集成。剪贴板仅通过受限 IPC 方法、由粘贴按钮调用，主进程校验请求来源。默认 FLV 路径通过 `kuaiting-stream:` 本地协议播放，淘宝接口与 CDN 流由主进程请求并校验域名。实验 RTC 的页面策略还允许淘宝和阿里云的 HTTPS/WSS 域名。
+渲染进程启用 `contextIsolation` 和沙箱，禁用 Node 集成。剪贴板仅通过受限 IPC 方法、由粘贴按钮调用，主进程校验请求来源。渲染进程不能直接访问网络：页面内容安全策略只放行本地的 `kuaiting-stream:` 媒体来源，淘宝接口与 CDN 流的请求全部由主进程代为完成，并限制在 `h5api.m.taobao.com`、`alicdn.com`、`tbcache.com` 等白名单域名内。
 
 图标由 `scripts/create-icon.swift` 绘制；重新生成 PNG 可使用 `swiftc -framework AppKit scripts/create-icon.swift -o /tmp/kuaiting-create-icon`，再执行 `/tmp/kuaiting-create-icon assets/icon.png`。PNG 和 ICNS 已提交，日常启动及打包不需要 Swift。
 

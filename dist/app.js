@@ -15,7 +15,6 @@ const livePlayer = new KuaitingLivePlayer((state, details) => {
   liveError = details.message || ''; playing = state === 'playing'; started = true;
   lastTick = performance.now();
   if (state === 'error') { setError(liveError, false); toast(liveError); }
-  else setError('');
   updatePlayer();
 });
 const reduced = Boolean(preferences?.reduced);
@@ -32,7 +31,7 @@ function setVolume(value) { volume = value; $('volume').value = value; $('volume
 function setSpeed(value) { speed = value; document.querySelectorAll('[data-speed]').forEach(b => { const active = Number(b.dataset.speed) === speed; b.classList.toggle('selected', active); b.setAttribute('aria-pressed', String(active)); }); if (source) source.playbackRate.value = speed; livePlayer.setSpeed(speed); savePreferences(); }
 function updateTime() { const seconds = Math.floor(elapsed); $('elapsed').textContent = `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`; }
 function updatePlayer() {
-  const busy = liveMode && ['connecting', 'buffering', 'reconnecting'].includes(liveStatus);
+  const busy = liveMode && ['connecting', 'buffering'].includes(liveStatus);
   $('quick-play').disabled = busy;
   $('quick-play').innerHTML = icon('play') + (busy ? '正在连接…' : '快速播放');
   $('toggle-play').disabled = liveMode && liveStatus === 'connecting';
@@ -42,24 +41,22 @@ function updatePlayer() {
   $('stop-button').disabled = !started;
   $('status').classList.toggle('playing', playing);
   if (liveMode) {
-    const label = { connecting: '正在解析', buffering: '正在缓冲', reconnecting: '自动重连中', playing: '正在收听', paused: '已暂停', error: '连接失败' }[liveStatus];
+    const label = { connecting: '正在解析', buffering: '正在缓冲', playing: '正在收听', paused: '已暂停', error: '连接失败' }[liveStatus];
     $('status').innerHTML = '<i></i><span></span>';
     $('status').lastElementChild.textContent = label;
     $('room-title').textContent = liveRoom?.title || '淘宝直播间';
-    $('room-subtitle').textContent = liveRoom ? `直播间 ${liveRoom.liveId} · FLV 纯音频` : '正在获取直播音频来源';
-    $('stage-title').textContent = { connecting: '正在连接你的直播间', buffering: '声音马上就来', reconnecting: '正在自动恢复声音', playing: '只听声音，专注这一刻', paused: '收听已暂停', error: '这次没能连上直播' }[liveStatus];
+    $('room-subtitle').textContent = liveRoom ? `直播间 ${liveRoom.liveId} · ${livePlayer.isRTC ? 'RTC 超低延时' : 'FLV 纯音频'}` : '正在获取直播音频来源';
+    $('stage-title').textContent = { connecting: '正在连接你的直播间', buffering: '声音马上就来', playing: '只听声音，专注这一刻', paused: '收听已暂停', error: '这次没能连上直播' }[liveStatus];
     $('stage-description').textContent = liveError || (liveStatus === 'paused' ? '继续收听将重新连接到当前直播进度' : '本地音频播放 · 不解码画面 · 提前量需与手机实测');
     $('transport-label').textContent = label;
-    $('footer-status').textContent = liveStatus === 'playing' ? 'FLV 音频已连接' : label;
-    updateDiagnostics();
+    $('footer-status').textContent = liveStatus === 'playing' ? (livePlayer.isRTC ? 'RTC 低延时音频已连接' : 'FLV 音频已连接') : label;
+    $('buffer-status').textContent = liveStatus === 'playing' ? (livePlayer.isRTC ? 'RTC 实时收听 · 无缓冲积压' : `本地缓冲 ${livePlayer.bufferSeconds.toFixed(1)} 秒 · 非直播总延迟`) : '等待音频播放';
     $('demo-button').innerHTML = icon(playing ? 'pause' : 'play') + (playing ? '暂停收听' : liveStatus === 'paused' ? '继续收听' : liveStatus === 'error' ? '重新连接' : '正在连接…');
     $('demo-button').disabled = busy;
     $('toggle-play').setAttribute('aria-label', playing ? '暂停直播' : '继续收听直播');
-    $('speed-label').textContent = '追赶倍速';
     return;
   }
   $('demo-button').disabled = false;
-  $('speed-label').textContent = '播放速度';
   $('buffer-status').textContent = '音频连接后显示本地缓冲';
   if (started) {
     $('status').innerHTML = `<i></i><span>${playing ? '正在试听' : '已暂停'}</span>`;
@@ -108,14 +105,7 @@ async function toggleDemo() {
 }
 function stopPlayback() { livePlayer.stop(); liveMode=false; liveStatus='idle'; liveRoom=null; liveError=''; if(source){source.stop();source=null;}playing=false;started=false;elapsed=0;updateTime();updatePlayer(); }
 function startLive(url) { stopPlayback(); setError(''); setTab('player'); liveInputURL=url; livePlayer.connect(url); }
-function updateDiagnostics() {
-  const d = livePlayer.diagnostics;
-  $('buffer-status').textContent = liveStatus === 'playing' ? `本地缓冲 ${d.buffer.toFixed(2)} 秒 · ${d.chasing ? '自动追赶 ' + d.rate.toFixed(2) + '×' : '正常收听'}` : '等待音频播放';
-  $('buffer-status').title = '本地缓冲不是直播总延迟，也不是相对手机提前量';
-  const panel = $('playback-diagnostics');
-  if (panel) panel.textContent = `通道：${d.transport}\n最近解析：${d.resolveMs === null ? '—' : Math.round(d.resolveMs) + ' ms'}\n本次首次起播：${d.firstAudioMs === null ? '—' : Math.round(d.firstAudioMs) + ' ms'}\n当前 / 目标缓冲：${d.buffer.toFixed(2)} / ${d.target.toFixed(2)} 秒\n最高缓冲：${d.peakBuffer.toFixed(2)} 秒\n实际倍速：${d.rate.toFixed(2)}×\n小步追赶：${d.seekCount} 次 / 累计 ${d.seekSeconds.toFixed(2)} 秒\n卡顿：${d.stalls} 次；重连：${d.reconnects} 次\n以上均不代表相对手机的提前量。`;
-}
-setInterval(()=>{const now=performance.now();if(playing){elapsed+=(now-lastTick)/1000;updateTime();}if(liveMode)updateDiagnostics();lastTick=now;},250);
+setInterval(()=>{const now=performance.now();if(playing){elapsed+=(now-lastTick)/1000;updateTime();if(liveMode&&!livePlayer.isRTC)$('buffer-status').textContent=`本地缓冲 ${livePlayer.bufferSeconds.toFixed(1)} 秒 · 非直播总延迟`;}lastTick=now;},250);
 function loadRoom(url) { $('room-url').value=url;$('clear-url').hidden=false;setError('');setTab('player');$('room-url').focus();toast('链接已填入，可点击快速播放。'); }
 function setTab(tab) { const selected = tab === 'favorites' ? 'favorites' : 'player'; $('player-view').hidden=selected!=='player';$('favorites-view').hidden=selected!=='favorites';document.querySelectorAll('[data-tab]').forEach(b=>{b.classList.toggle('active',b.dataset.tab===selected);b.setAttribute('aria-current',b.dataset.tab===selected?'page':'false');}); }
 function makeFavorite(item,compact=false) { const row=document.createElement('div');row.className='favorite-item';const badge=document.createElement('span');badge.className='mini-mark';badge.innerHTML=icon('headphones');const info=document.createElement('div');info.className='favorite-info';const name=document.createElement('strong');name.textContent=item.name;const url=document.createElement('p');url.textContent=compact?'淘宝直播间':item.url;info.append(name,url);const play=document.createElement('button');play.className='load-favorite';play.innerHTML=compact?icon('arrow'):'打开';play.setAttribute('aria-label',`打开 ${item.name}`);play.onclick=()=>loadRoom(item.url);row.append(badge,info,play);if(!compact){const remove=document.createElement('button');remove.className='icon-button';remove.innerHTML=icon('close');remove.setAttribute('aria-label',`删除收藏 ${item.name}`);remove.onclick=()=>{favorites=favorites.filter(f=>f.url!==item.url);if(!memory.set('kuaiting.favorites',favorites))toast('浏览器无法保存更改，刷新后可能恢复。');renderFavorites();};row.append(remove);}return row; }
@@ -137,7 +127,7 @@ setVolume(volume);setSpeed(speed);renderFavorites();
 if (window.kuaitingDesktop) {
   document.documentElement.dataset.desktop = window.kuaitingDesktop.platform;
   const previewLabel = document.querySelector('.version');
-  if (previewLabel) previewLabel.textContent = 'Mac 测试版 0.3';
+  if (previewLabel) previewLabel.textContent = 'Mac 测试版 0.2';
   window.kuaitingDesktop.ready();
 }
 const modelContext=document.modelContext;

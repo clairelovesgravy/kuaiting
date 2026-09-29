@@ -5,17 +5,6 @@ const { parse } = require('../dist/room-link.js');
 const API = 'https://h5api.m.taobao.com/h5/mtop.roomstudio.live.detail.get/1.0/';
 const APP_KEY = '34675810';
 const REQUEST_HEADERS = { Referer: 'https://tbzb.taobao.com/', 'User-Agent': 'Mozilla/5.0' };
-const tokenSessions = new WeakMap();
-const failure = (message, code, retryable = false) => Object.assign(new Error(message), { code, retryable });
-
-function sessionFor(fetchImpl) {
-  let session = tokenSessions.get(fetchImpl);
-  if (!session || session.expiresAt <= Date.now()) {
-    session = { cookies: new Map(), expiresAt: 0 };
-    tokenSessions.set(fetchImpl, session);
-  }
-  return session;
-}
 
 function streamURL(value) {
   if (typeof value !== 'string') return null;
@@ -39,15 +28,15 @@ function rtcURL(value) {
 }
 
 function extractLive(data, expectedId) {
-  if (!data || typeof data !== 'object') throw failure('淘宝返回的直播间信息不完整，请重试。', 'BAD_RESPONSE');
+  if (!data || typeof data !== 'object') throw new Error('淘宝返回的直播间信息不完整，请重试。');
   const returnedId = String(data.liveId || data.id || '');
-  if (returnedId && returnedId !== expectedId) throw failure('返回的直播间与链接不一致，已停止连接。', 'ROOM_MISMATCH');
-  if (String(data.roomStatus) !== '1') throw failure('该直播间当前未开播或已经结束，请换一个正在直播的链接。', 'OFFLINE');
-  if (String(data.streamStatus) !== '1') throw failure('主播暂未推流，正在尝试恢复。', 'NO_STREAM', true);
+  if (returnedId && returnedId !== expectedId) throw new Error('返回的直播间与链接不一致，已停止连接。');
+  if (String(data.roomStatus) !== '1') throw new Error('该直播间当前未开播或已经结束，请换一个正在直播的链接。');
+  if (String(data.streamStatus) !== '1') throw new Error('主播暂未推流，请稍后重试。');
   const variants = Array.isArray(data.liveUrlList) ? data.liveUrlList : [];
   const urls = [...variants.filter(item => item?.definition === 'ld').map(item => item.flvUrl),
     data.liveUrl, ...variants.map(item => item?.flvUrl)].map(streamURL).filter(Boolean);
-  if (!urls.length) throw failure('这个直播间没有可用的 FLV 音频来源，暂时无法收听。', 'NO_SOURCE');
+  if (!urls.length) throw new Error('这个直播间没有可用的 FLV 音频来源，暂时无法收听。');
   // ARTC 超低延时流优先选 md（720p）档；只在需要兜底时用 FLV。
   const rtc = [variants.find(item => item?.definition === 'md')?.rtcLiveUrl,
     ...variants.map(item => item?.rtcLiveUrl), data.rtcLiveUrl].map(rtcURL).find(Boolean) || null;
@@ -55,12 +44,10 @@ function extractLive(data, expectedId) {
 }
 
 async function resolveRoom(value, { signal, fetchImpl = fetch } = {}) {
-  let liveId;
-  try { ({ liveId } = parse(value)); } catch (error) { throw failure(error.message, 'INVALID_LINK'); }
+  const { liveId } = parse(value);
   const data = JSON.stringify({ liveId, productType: 'live', liveSource: 'source_pc_live', entryLiveSource: 'source_pc_live', useLiveFandom: false });
   // Use only the anonymous H5 session issued by this endpoint; no browser/account cookies.
-  const session = sessionFor(fetchImpl);
-  const cookies = session.cookies;
+  const cookies = new Map();
   for (let attempt = 0; attempt < 2; attempt++) {
     const timestamp = String(Date.now());
     const token = (cookies.get('_m_h5_tk') || 'undefined').split('_')[0];
@@ -71,32 +58,22 @@ async function resolveRoom(value, { signal, fetchImpl = fetch } = {}) {
     if (cookies.size) headers.Cookie = [...cookies].map(([key, value]) => `${key}=${value}`).join('; ');
     const response = await fetchImpl(`${API}?${params}`, { headers, redirect: 'error',
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(12000)]) : AbortSignal.timeout(12000) });
-    if (!response.ok) throw failure(`淘宝直播连接失败（HTTP ${response.status}），请稍后重试。`, 'HTTP', response.status >= 500 || response.status === 408);
+    if (!response.ok) throw new Error(`淘宝直播连接失败（HTTP ${response.status}），请稍后重试。`);
     for (const cookie of response.headers.getSetCookie()) {
       const pair = cookie.split(';', 1)[0], at = pair.indexOf('=');
-      if (at > 0 && ['_m_h5_tk', '_m_h5_tk_enc'].includes(pair.slice(0, at))) {
-        const name = pair.slice(0, at), value = pair.slice(at + 1);
-        cookies.set(name, value);
-        if (name === '_m_h5_tk') {
-          const expires = Number(value.split('_')[1]);
-          // Keep anonymous tokens only in memory and never beyond their expiry.
-          session.expiresAt = Math.min(Date.now() + 5 * 60 * 1000, Number.isFinite(expires) ? expires - 30000 : 0);
-        }
-      }
+      if (at > 0 && ['_m_h5_tk', '_m_h5_tk_enc'].includes(pair.slice(0, at))) cookies.set(pair.slice(0, at), pair.slice(at + 1));
     }
     const text = await response.text();
-    if (text.length > 4 * 1024 * 1024) throw failure('直播间响应过大，已停止连接。', 'BAD_RESPONSE');
+    if (text.length > 4 * 1024 * 1024) throw new Error('直播间响应过大，已停止连接。');
     let result;
-    try { result = JSON.parse(text); } catch { throw failure('淘宝返回了验证页面，当前无法直接解析，请在淘宝确认能正常观看。', 'VERIFY'); }
+    try { result = JSON.parse(text); } catch { throw new Error('淘宝返回了验证页面，当前无法直接解析，请在淘宝确认能正常观看。'); }
     const ret = Array.isArray(result.ret) ? result.ret.map(String) : [];
     if (ret.some(item => item.startsWith('SUCCESS::'))) return extractLive(result.data, liveId);
     if (!attempt && ret.some(item => /FAIL_SYS_TOKEN_(EMPTY|EXOIRED|EXPIRED)/.test(item)) && cookies.has('_m_h5_tk')) continue;
     if (ret.some(item => /SESSION_EXPIRED|NEED_LOGIN|LOGIN|USER_VALIDATE|RGV587|ACCESS_DENIED|ILLEGAL_ACCESS/.test(item))) {
-      session.expiresAt = 0;
-      throw failure('淘宝要求登录或验证，当前无法直接收听这个直播间。请先在淘宝网页确认直播状态。', 'VERIFY');
+      throw new Error('淘宝要求登录或验证，当前无法直接收听这个直播间。请先在淘宝网页确认直播状态。');
     }
-    session.expiresAt = 0;
-    throw failure('淘宝未提供可播放的直播信息，请确认直播仍在进行后重试。', 'UNAVAILABLE');
+    throw new Error('淘宝未提供可播放的直播信息，请确认直播仍在进行后重试。');
   }
   throw new Error('直播连接失败，请重试。');
 }
