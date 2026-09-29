@@ -31,7 +31,7 @@ function setVolume(value) { volume = value; $('volume').value = value; $('volume
 function setSpeed(value) { speed = value; document.querySelectorAll('[data-speed]').forEach(b => { const active = Number(b.dataset.speed) === speed; b.classList.toggle('selected', active); b.setAttribute('aria-pressed', String(active)); }); if (source) source.playbackRate.value = speed; livePlayer.setSpeed(speed); savePreferences(); }
 function updateTime() { const seconds = Math.floor(elapsed); $('elapsed').textContent = `${String(Math.floor(seconds / 60)).padStart(2,'0')}:${String(seconds % 60).padStart(2,'0')}`; }
 function updatePlayer() {
-  const busy = liveMode && ['connecting', 'buffering'].includes(liveStatus);
+  const busy = liveMode && ['connecting', 'buffering', 'reconnecting'].includes(liveStatus);
   $('quick-play').disabled = busy;
   $('quick-play').innerHTML = icon('play') + (busy ? '正在连接…' : '快速播放');
   $('toggle-play').disabled = liveMode && liveStatus === 'connecting';
@@ -41,12 +41,12 @@ function updatePlayer() {
   $('stop-button').disabled = !started;
   $('status').classList.toggle('playing', playing);
   if (liveMode) {
-    const label = { connecting: '正在解析', buffering: '正在缓冲', playing: '正在收听', paused: '已暂停', error: '连接失败' }[liveStatus];
+    const label = { connecting: '正在解析', buffering: '正在缓冲', reconnecting: '自动重连中', playing: '正在收听', paused: '已暂停', error: '连接失败' }[liveStatus];
     $('status').innerHTML = '<i></i><span></span>';
     $('status').lastElementChild.textContent = label;
     $('room-title').textContent = liveRoom?.title || '淘宝直播间';
     $('room-subtitle').textContent = liveRoom ? `直播间 ${liveRoom.liveId} · ${livePlayer.isRTC ? 'RTC 超低延时' : 'FLV 纯音频'}` : '正在获取直播音频来源';
-    $('stage-title').textContent = { connecting: '正在连接你的直播间', buffering: '声音马上就来', playing: '只听声音，专注这一刻', paused: '收听已暂停', error: '这次没能连上直播' }[liveStatus];
+    $('stage-title').textContent = { connecting: '正在连接你的直播间', buffering: '声音马上就来', reconnecting: '正在自动恢复声音', playing: '只听声音，专注这一刻', paused: '收听已暂停', error: '这次没能连上直播' }[liveStatus];
     $('stage-description').textContent = liveError || (liveStatus === 'paused' ? '继续收听将重新连接到当前直播进度' : '本地音频播放 · 不解码画面 · 提前量需与手机实测');
     $('transport-label').textContent = label;
     $('footer-status').textContent = liveStatus === 'playing' ? (livePlayer.isRTC ? 'RTC 低延时音频已连接' : 'FLV 音频已连接') : label;

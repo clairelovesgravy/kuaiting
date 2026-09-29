@@ -67,7 +67,8 @@ ipcMain.handle('kuaiting:resolve-live', async (event, value) => {
   } catch (error) {
     const message = error.name === 'TimeoutError' ? '连接淘宝超时，请检查网络后重试。' :
       error.name === 'AbortError' ? '连接已取消。' : error.message === 'fetch failed' ? '暂时无法连接淘宝，请检查网络后重试。' : error.message;
-    return { ok: false, error: message || '直播连接失败，请重试。' };
+    const retryable = error.retryable ?? ['TimeoutError', 'TypeError'].includes(error.name);
+    return { ok: false, error: message || '直播连接失败，请重试。', retryable };
   }
 });
 ipcMain.handle('kuaiting:stop-live', (event) => {
