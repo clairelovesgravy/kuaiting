@@ -6,7 +6,7 @@
 
 ## 0.3 自动小步追赶
 
-- 每 250 ms 检查一次连续可播放缓冲，目标为 0.5 秒；超过约 0.58 秒即开始追赶，不等待严重积压、不弹确认。
+- 每 250 ms 检查一次连续可播放缓冲，目标为 0.5 秒；超过约 0.58 秒即开始追赶，不等待严重积压、不弹确认。起播 CDN 追溯片段或长时间断流造成 3 秒以上积压时，一次跳到直播边缘，再交由小步模式维持。
 - 单次前移 20–60 ms，配合 1.02–1.08× 轻微加速；用户选择更高倍速时，仅在积压期间用作追赶加速。接近目标后自动回到 1.0×，避免持续倍速耗空缓冲。
 - 缓冲不足、暂停、正在定位或缓冲有断层时不前移。目标值是调度参数，不保证实际缓冲始终达标。
 - **小步前移仍会跳过短片段，不能保证不漏短音节。** 可以在「使用帮助 → 本次播放诊断」查看前移次数及累计时长。
@@ -42,6 +42,26 @@ npm run package:mac
 命令会为当前 Mac 架构生成 `.app`；在 Intel Mac 上运行时输出目录为 `release/快听-darwin-x64/`。无需安装到「应用程序」目录即可运行。
 
 如果下载 Electron 运行时失败（无法访问 GitHub），可改用镜像：`ELECTRON_MIRROR="https://npmmirror.com/mirrors/electron/" npm run package:mac`。
+
+## Developer ID 签名与 Apple 公证
+
+正式发布命令已配置，但当前尚未完成正式签名和公证。需要先加入 [Apple Developer Program](https://developer.apple.com/programs/)，并在这台 Mac 的钥匙串中安装有效的 **Developer ID Application** 证书及对应私钥。Apple Development 证书不能替代它。
+
+1. 会员生效后，在 Xcode → Settings → Accounts 添加开发者账号，通过 Manage Certificates 创建 Developer ID Application 证书（团队可能需要 Account Holder 操作）。已有证书在另一台 Mac 时，应安全导出并导入含私钥的 `.p12`，不要放进项目。
+2. 执行 `security find-identity -v -p codesigning`，确认能找到有效的 Developer ID Application。
+3. 在自己的终端交互配置公证凭据，按提示填写 Apple 账号、Team ID 和 App 专用密码；不要把密码发到聊天或写入代码：
+
+   ```sh
+   xcrun notarytool store-credentials "kuaiting-notary"
+   ```
+
+4. 执行 `npm run release:mac`。脚本先检查证书和钥匙串凭据，再使用 Electron Packager 的签名、公证工具，启用 hardened runtime、Apple 时间戳和 JIT entitlement。公证成功后自动附加票据，验证签名、票据及 Gatekeeper，最后生成可分发 ZIP。
+
+正式输出位于 `release/notarized/快听-darwin-arm64/`（Intel 为 x64），不覆盖本机试用包。多张证书时使用 `KUAITING_SIGN_IDENTITY` 指定完整名称或 SHA-1；其他钥匙串档案可用 `KUAITING_NOTARY_PROFILE` 指定。所有凭据预检通过后才会开始打包和提交 Apple。
+
+公证涉及网络上传和 Apple 审核，可能需要等待。命令报错即不视为发布成功；若已提交但等待中断，可使用 `xcrun notarytool history --keychain-profile kuaiting-notary` 查询提交记录。当前机器缺少证书，因此仅验证了脚本语法及缺失证书时的拦截，尚未验证真实签名、公证与正式包启动。
+
+参考：[Apple Developer ID](https://developer.apple.com/developer-id/)、[Electron 公证工具](https://github.com/electron/notarize)。
 
 ## 可体验的功能
 

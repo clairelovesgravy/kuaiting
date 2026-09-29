@@ -51,15 +51,33 @@ function harness(options = {}) {
   return { player, time, states, audios, engines, listeners, calls: () => calls };
 }
 
-test('small-step chasing begins before 1.2 seconds and never makes large jumps', () => {
+test('small-step chasing below the jump threshold, single edge jump above it', () => {
   const chase = new Latency();
   assert.ok(chase.decide({ buffer: .7, now: 0 }).seek > 0);
   assert.equal(chase.decide({ buffer: 30, now: 100 }).seek, 0);
-  const next = chase.decide({ buffer: 30, now: 250 });
+  const jump = chase.decide({ buffer: 30, now: 250 });
+  assert.ok(Math.abs(jump.seek - 29.5) < 1e-9 && jump.rate === 1);
+  const next = chase.decide({ buffer: .7, now: 500 });
   assert.ok(next.seek <= .06 && next.rate <= 1.08);
-  assert.equal(chase.decide({ buffer: .5, rate: 1.5, now: 500 }).rate, 1);
-  assert.equal(chase.decide({ buffer: 10, seeking: true, now: 750 }).seek, 0);
-  assert.equal(chase.decide({ buffer: .2, rate: 1.5, now: 1000 }).seek, 0);
+  assert.equal(chase.decide({ buffer: .5, rate: 1.5, now: 750 }).rate, 1);
+  assert.equal(chase.decide({ buffer: 10, seeking: true, now: 1000 }).seek, 0);
+  assert.equal(chase.decide({ buffer: .2, rate: 1.5, now: 1250 }).seek, 0);
+});
+
+test('default clock survives receiver-sensitive native timers (illegal invocation regression)', async () => {
+  const time = clock();
+  const strict = fn => function (...args) { if (this && this !== globalThis) throw new TypeError('Illegal invocation'); return fn(...args); };
+  const win = { addEventListener() {}, removeEventListener() {}, mpegts: { getFeatureList: () => ({ mseLivePlayback: true }),
+    Events: { ERROR: 'error', MEDIA_INFO: 'info' }, ErrorTypes: {},
+    createPlayer: () => ({ on() {}, attachMediaElement() {}, load() {}, destroy() {}, async play() {} }) } };
+  const context = { window: win, KuaitingLatencyController: Latency, performance: { now: time.now },
+    setTimeout: strict(time.setTimeout), clearTimeout: strict(time.clearTimeout),
+    setInterval: strict(time.setInterval), clearInterval: strict(time.clearInterval) };
+  vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../dist/live-player.js'), 'utf8'), context);
+  const player = new win.KuaitingLivePlayer(() => {}, { makeAudio: () => ({ buffered: { length: 0 }, pause() {}, removeAttribute() {}, load() {}, remove() {} }) });
+  player.stop();  // 旧实现在此处以 Illegal invocation 抛出
+  player.dispose();
 });
 
 test('continuous delivery simulation converges to the target without draining the buffer', () => {

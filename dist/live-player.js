@@ -3,7 +3,9 @@
 class KuaitingLivePlayer {
   constructor(onState, options = {}) {
     this.onState = onState;
-    this.clock = options.clock || { now: () => performance.now(), setTimeout, clearTimeout, setInterval, clearInterval };
+    this.clock = options.clock || { now: () => performance.now(),
+      setTimeout: (...args) => setTimeout(...args), clearTimeout: (...args) => clearTimeout(...args),
+      setInterval: (...args) => setInterval(...args), clearInterval: (...args) => clearInterval(...args) };
     this.bridge = options.bridge || window.kuaitingDesktop;
     this.makeAudio = options.makeAudio || (() => { const a = document.createElement('audio'); a.hidden = true; document.body.append(a); return a; });
     this.online = options.online || (() => navigator.onLine !== false);
