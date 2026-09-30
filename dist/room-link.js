@@ -19,6 +19,13 @@
     if (url.protocol !== 'https:' || url.port || url.username || url.password) throw new Error('请粘贴淘宝或小红书直播间链接。');
     // 小红书分享短链：roomId 藏在重定向后的地址里，由主进程解析。
     if (url.hostname === 'xhslink.com') return { url: url.href, liveId: '', platform: 'xhs' };
+    // 抖音：App 分享短链（重定向后拿 rid）或网页版 live.douyin.com/<rid>。
+    if (url.hostname === 'v.douyin.com') return { url: url.href, liveId: '', platform: 'douyin' };
+    if (url.hostname === 'live.douyin.com') {
+      const rid = url.pathname.match(/^\/(\d{6,20})\/?$/);
+      if (!rid) throw new Error('请进入抖音直播间后，复制完整的直播间地址。');
+      return { url: url.href, liveId: rid[1], platform: 'douyin' };
+    }
     if (url.hostname === 'www.xiaohongshu.com' || url.hostname === 'xiaohongshu.com') {
       const match = url.pathname.match(ROOM_PATH);
       if (!match) throw new Error('请进入小红书直播间后，复制完整的直播间地址。');

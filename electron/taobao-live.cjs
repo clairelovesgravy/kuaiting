@@ -84,11 +84,12 @@ async function openStream(sourceURL, { signal, fetchImpl = fetch } = {}) {
   let url = new URL(sourceURL);
   for (let redirects = 0; redirects < 4; redirects++) {
     if (url.protocol !== 'https:' || url.username || url.password || url.port ||
-      !['alicdn.com', 'tbcache.com', 'xhscdn.com'].some(domain => url.hostname === domain || url.hostname.endsWith('.' + domain))) {
+      !['alicdn.com', 'tbcache.com', 'xhscdn.com', 'douyincdn.com'].some(domain => url.hostname === domain || url.hostname.endsWith('.' + domain))) {
       throw new Error('直播流跳转到了不支持的地址。');
     }
-    // 小红书 CDN 不需要 Referer；淘宝 CDN 维持网页版请求头。
-    const headers = url.hostname.endsWith('xhscdn.com') ? { 'User-Agent': REQUEST_HEADERS['User-Agent'] } : REQUEST_HEADERS;
+    // 各平台 CDN 的请求头：淘宝维持网页版 Referer；小红书不需要；抖音带网页 Referer。
+    const headers = url.hostname.endsWith('xhscdn.com') ? { 'User-Agent': REQUEST_HEADERS['User-Agent'] } :
+      url.hostname.endsWith('douyincdn.com') ? { 'User-Agent': REQUEST_HEADERS['User-Agent'], Referer: 'https://live.douyin.com/' } : REQUEST_HEADERS;
     const response = await fetchImpl(url.href, { headers, redirect: 'manual', signal });
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const location = response.headers.get('location');

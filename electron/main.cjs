@@ -8,6 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { randomUUID } = require('node:crypto');
 const { resolveRoom: resolveTaobao, openStream } = require('./taobao-live.cjs');
 const { resolveRoom: resolveXHS } = require('./xhs-live.cjs');
+const { resolveRoom: resolveDouyin } = require('./dy-live.cjs');
 const { parse: parseRoomLink } = require('../dist/room-link.js');
 
 protocol.registerSchemesAsPrivileged([{ scheme: 'kuaiting-stream', privileges: {
@@ -59,9 +60,9 @@ ipcMain.handle('kuaiting:resolve-live', async (event, value) => {
   resolveController = new AbortController();
   try {
     const link = parseRoomLink(value);
-    const live = link.platform === 'xhs'
-      ? await resolveXHS(value, { signal: resolveController.signal })
-      : await resolveTaobao(value, { signal: resolveController.signal });
+    const live = link.platform === 'xhs' ? await resolveXHS(value, { signal: resolveController.signal }) :
+      link.platform === 'douyin' ? await resolveDouyin(value, { signal: resolveController.signal }) :
+      await resolveTaobao(value, { signal: resolveController.signal });
     if (generation !== resolveGeneration) return { ok: false, error: '连接已取消。' };
     const id = randomUUID();
     activeLive = { ...live, id, controllers: new Set() };
@@ -71,7 +72,7 @@ ipcMain.handle('kuaiting:resolve-live', async (event, value) => {
     return { ok: true, liveId: live.liveId, title: live.title, platform: link.platform, rtcURL, streamURL: `kuaiting-stream://live/${id}` };
   } catch (error) {
     const platform = (() => { try { return parseRoomLink(value).platform; } catch { return 'taobao'; } })();
-    const target = platform === 'xhs' ? '小红书' : '淘宝';
+    const target = platform === 'xhs' ? '小红书' : platform === 'douyin' ? '抖音' : '淘宝';
     const message = error.name === 'TimeoutError' ? `连接${target}超时，请检查网络后重试。` :
       error.name === 'AbortError' ? '连接已取消。' : error.message === 'fetch failed' ? `暂时无法连接${target}，请检查网络后重试。` : error.message;
     const retryable = error.retryable ?? ['TimeoutError', 'TypeError'].includes(error.name);

@@ -45,7 +45,7 @@ function updatePlayer() {
     $('status').innerHTML = '<i></i><span></span>';
     $('status').lastElementChild.textContent = label;
     $('room-title').textContent = liveRoom?.title || '淘宝直播间';
-    $('room-subtitle').textContent = liveRoom ? `${liveRoom.platform === 'xhs' ? '小红书' : '淘宝'}直播间 ${liveRoom.liveId} · ${livePlayer.isRTC ? 'RTC 超低延时' : 'FLV 纯音频'}` : '正在获取直播音频来源';
+    $('room-subtitle').textContent = liveRoom ? `${({ taobao: '淘宝', xhs: '小红书', douyin: '抖音' })[liveRoom.platform] || '淘宝'}直播间 ${liveRoom.liveId} · ${livePlayer.isRTC ? 'RTC 超低延时' : 'FLV 纯音频'}` : '正在获取直播音频来源';
     $('stage-title').textContent = { connecting: '正在连接你的直播间', buffering: '声音马上就来', reconnecting: '正在自动恢复声音', playing: '只听声音，专注这一刻', paused: '收听已暂停', error: '这次没能连上直播' }[liveStatus];
     $('stage-description').textContent = liveError || (liveStatus === 'paused' ? '继续收听将重新连接到当前直播进度' : '本地音频播放 · 不解码画面 · 提前量需与手机实测');
     $('transport-label').textContent = label;
